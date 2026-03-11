@@ -1,0 +1,972 @@
+--- START OF FILE index.html ---
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>জমি দখল Nur - Online Multiplayer</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;700;900&display=swap" rel="stylesheet">
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<style>
+:root {
+--danger: #e74c3c;
+--primary: #2563EB;
+--win-color: #34A853;
+--modal-bg: rgba(0, 0, 0, 0.7);
+--modal-content-bg: #fff;
+}
+body {
+margin: 0;
+font-family: "Noto Sans Bengali", "Poppins", Arial, sans-serif;
+height: 100vh;
+display: flex;
+align-items: center;
+justify-content: center;
+color: #333;
+background: linear-gradient(135deg, #74ebd5, #9face6, #f6d365, #fda085);
+background-size: 400% 400%;
+animation: animatedBackground 15s ease infinite;
+overflow: hidden;
+}
+@keyframes animatedBackground {
+0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; }
+}
+.page {
+position: absolute; inset: 0; display: none; width: 100%; height: 100%;
+align-items: center; justify-content: center; overflow-y: auto;
+}
+.page.active { display: flex; flex-direction: column; }
+
+/* Menu & Containers */
+.menu-container, .opening-container, .room-container {
+max-width: 480px; width: 96%; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px);
+padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center;
+position: relative; margin: auto; box-sizing: border-box;
+}
+.opening-container img { width: 160px; border-radius: 50%; }
+.opening-container h2 { font-size: 28px; margin: 10px 0 5px; color: #111; }
+.opening-container .studio { color: #555; }
+
+/* Game Container - Updated for width issue */
+.game-container {
+width: 100%; max-width: 600px; box-sizing: border-box; background: #fff; border-radius: 16px; padding: 18px;
+box-shadow: 0 12px 30px rgba(0,0,0,0.12); text-align: center; position: relative; margin: auto;
+}
+.game-container h1 { margin: 6px 0 12px; font-size: 26px; letter-spacing: 1px; }
+.info { margin-bottom: 8px; }
+.score-board { margin-top: 10px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.player-score { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 10px; font-weight: 700; background: #fbfdff; border: 1px solid #efefef; min-width: 100px; justify-content: center; }
+.ping-indicator { font-size: 11px; color: #888; font-weight: normal; }
+
+/* Game Board & Elements - Updated Touch Hitbox & Wrapper */
+#game-board-wrapper { width: 100%; overflow-x: auto; overflow-y: auto; max-height: 60vh; padding: 10px; box-sizing: border-box; -webkit-overflow-scrolling: touch; }
+#game-board { margin: 0 auto; background: linear-gradient(180deg, #fafafa, #f3f6f8); border-radius: 14px; position: relative; box-shadow: inset 0 4px 10px rgba(0,0,0,0.06); user-select: none; -webkit-user-select: none; }
+.dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 40; position: absolute; transform: scale(0); transition: transform .3s cubic-bezier(.2,.9,.2,1); }
+.dot.pop { transform: scale(1); }
+.line { position: absolute; z-index: 30; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+/* Expanded hitbox for accurate touch */
+.line::after { content: ''; position: absolute; top: -16px; bottom: -16px; left: -16px; right: -16px; z-index: 35; }
+.line-inner { width: 100%; height: 100%; border-radius: 6px; background: #e0e0e0; transition: background .18s, transform .12s, box-shadow .18s; display: block; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+.line:hover .line-inner { transform: scale(1.06); background: #d0d0d0; }
+.line.drawn .line-inner { box-shadow: 0 6px 18px rgba(0,0,0,0.12); cursor: default; }
+.box { position: absolute; border-radius: 8px; z-index: 10; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; transform: scale(0); transition: transform .3s cubic-bezier(.2,.9,.2,1), box-shadow .18s; box-shadow: 0 8px 18px rgba(0,0,0,0.12); font-size: 24px; }
+.box.filled { transform: scale(1); }
+#winner-message { margin-top: 12px; font-size: 18px; font-weight: 700; min-height: 27px;}
+
+/* Inputs and Buttons */
+.settings, .controls { margin-top: 14px; display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.settings label, .controls label { font-weight: 700; }
+.settings select, .settings input { padding: 6px; border-radius: 6px; border: 1px solid #cfcfcf; margin-left: 8px; }
+.btn { padding: 10px 16px; border-radius: 8px; border: 1px solid #cfcfcf; background: #f6f8fb; cursor: pointer; font-family: inherit; font-weight: 700; transition: background .1s, transform .1s;}
+.btn:hover { transform: translateY(-1px); }
+.btn-danger { background-color: var(--danger); color: white; border-color: var(--danger);}
+.btn-primary { background-color: var(--primary); color: white; border-color: var(--primary); }
+.btn-success { background-color: var(--win-color); color: white; border-color: var(--win-color); }
+
+/* Online Room Specific Styles */
+.input-group { margin-bottom: 15px; text-align: left; }
+.input-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #444; }
+.input-group input, .input-group select { width: calc(100% - 20px); padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+.copy-paste-wrapper { display: flex; align-items: center; width: 100%;}
+.copy-paste-wrapper input { width: calc(100% - 40px); border-radius: 8px 0 0 8px; margin: 0;}
+.btn-icon { width: 40px; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 0 8px 8px 0; cursor: pointer; font-weight: bold; }
+.checkbox-group { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 15px; font-weight: bold; }
+
+/* Lobby Seats */
+.lobby-seats { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin: 20px 0; }
+.seat { width: 90px; height: 120px; background: #f0f0f0; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; border: 2px dashed #ccc; transition: all 0.3s; }
+.seat.occupied { border-style: solid; background: #fff; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+.seat img { width: 50px; height: 50px; border-radius: 50%; margin-bottom: 5px; border: 2px solid transparent; }
+.seat .name { font-size: 12px; font-weight: bold; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 5px; box-sizing: border-box; }
+.seat .ping { font-size: 10px; color: #888; }
+.crown { position: absolute; top: -15px; font-size: 24px; animation: floatCrown 2s infinite ease-in-out; display: none; }
+.seat.host .crown { display: block; }
+@keyframes floatCrown { 0%, 100% { transform: translateY(0) rotate(-10deg); } 50% { transform: translateY(-5px) rotate(10deg); } }
+
+/* Countdown Overlay */
+.countdown-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); color: white; font-size: 80px; font-weight: 900; display: none; align-items: center; justify-content: center; z-index: 999; flex-direction: column; }
+.countdown-overlay span { font-size: 20px; font-weight: normal; margin-top: 20px; }
+
+/* Auth Layout - Added Log Out */
+.user-profile-mini { position: absolute; top: 15px; left: 15px; display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.9); padding: 5px 15px; border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); font-weight: bold; display: none; z-index: 100;}
+.user-profile-mini img { width: 30px; height: 30px; border-radius: 50%; }
+
+/* Timer */
+#timer-container { width: 100%; height: 10px; background-color: #f0f0f0; border-radius: 5px; margin-bottom: 12px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); position: relative; display: block; }
+#timer-bar { height: 100%; width: 100%; background: linear-gradient(90deg, var(--win-color), var(--primary)); transform-origin: left; transition: width 0.1s linear; }
+#timer-countdown { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 14px; font-weight: 700; color: #333; z-index: 2; }
+
+/* Modals & Overlays */
+.utility-button { position: absolute; top: 15px; right: 15px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 50%; width: 40px; height: 40px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .1s; font-weight: 700; z-index: 50; }
+.modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--modal-bg); display: none; align-items: center; justify-content: center; z-index: 100; opacity: 0; transition: opacity 0.3s; }
+.modal-active { display: flex; opacity: 1; }
+.modal-content { background: var(--modal-content-bg); padding: 25px; border-radius: 12px; max-width: 400px; width: 90%; max-height: 80vh; transform: scale(0.8); opacity: 0; transition: transform 0.3s; overflow-y: auto;}
+.modal-active .modal-content { transform: scale(1); opacity: 1; }
+.modal-close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--danger); float: right; margin-top:-10px; margin-right:-10px;}
+
+/* Pause Overlay */
+.pause-overlay { position: absolute; inset: 0; background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(5px); display: none; align-items: center; justify-content: center; z-index: 60; border-radius: 16px; opacity: 0; transition: opacity 0.3s; }
+.pause-overlay.active { display: flex; opacity: 1; }
+.pause-window { background: var(--modal-content-bg); padding: 30px; border-radius: 15px; box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3); text-align: center; transform: scale(0.9); transition: transform 0.3s; }
+.pause-overlay.active .pause-window { transform: scale(1); }
+
+/* Custom start game btn */
+.start-game-btn-nnuu { position: relative; padding: 22px 55px; font-size: 20px; font-weight: 800; border-radius: 60px; cursor: pointer; overflow: hidden; color: black; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 50%, #ff6b6b 100%); background-size: 300% 300%; animation: gradientShift 6s ease infinite; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3); border: none; }
+@keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+/* Notification */
+.notification-container { position: fixed; top: 20px; right: 20px; width: 320px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;}
+.notification { background: rgba(255, 255, 255, 0.95); border-radius: 12px; padding: 16px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); border: 1px solid var(--primary); position: relative; overflow: hidden; transform: translateX(400px); transition: transform 0.5s; opacity: 0; }
+.notification.active { transform: translateX(0); opacity: 1; }
+
+.winning-container { max-width: 600px; width: 96%; background: rgba(255, 255, 255, 0.95); padding: 40px; border-radius: 25px; box-shadow: 0 15px 40px rgba(0,0,0,0.2); text-align: center; margin: auto; box-sizing: border-box;}
+.rankings-list { list-style: none; padding: 0; background: #f8f8f8; border-radius: 12px; }
+.rank-item { display: flex; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #eee; font-weight: bold;}
+</style>
+</head>
+<body>
+
+<div id="user-profile" class="user-profile-mini">
+    <img id="nav-user-img" src="" alt="User">
+    <span id="nav-user-name">...</span>
+    <button id="btn-logout" style="margin-left:8px; padding:4px 8px; background:var(--danger); color:#fff; border:none; border-radius:4px; cursor:pointer; font-size: 12px;">লগ আউট</button>
+</div>
+
+<!-- Auth / Login Modal -->
+<div id="auth-modal" class="modal-backdrop">
+    <div class="modal-content" style="text-align: center; max-width: 320px;">
+        <button class="modal-close-btn" onclick="document.getElementById('auth-modal').classList.remove('modal-active')">&times;</button>
+        <h3 style="margin-bottom: 15px; color: var(--primary);">অনলাইন মাল্টিপ্লেয়ার</h3>
+        <p style="font-size: 14px; color: #555; margin-bottom: 25px;">গেমটি অনলাইনে খেলতে আপনার গুগল একাউন্ট দিয়ে লগিন করুন।</p>
+        <button id="btn-google-login" class="btn" style="display:flex; align-items:center; justify-content:center; gap:10px; width:100%; background:#fff; border:1px solid #ccc; padding:12px; border-radius:8px; cursor:pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" style="width:24px; height:24px;" alt="Google">
+            <span style="font-weight:bold; font-size:16px; color:#444;">Sign in with Google</span>
+        </button>
+    </div>
+</div>
+
+<!-- Rules Modal -->
+<div id="rules-modal" class="modal-backdrop">
+<div class="modal-content">
+<button class="modal-close-btn" id="modalCloseBtn">&times;</button>
+<h2>গেমের নিয়মাবলী</h2>
+<p><strong>জমি দখল</strong> একটি ক্লাসিক ডটস অ্যান্ড বক্সেস গেম। এর প্রধান লক্ষ্য হলো প্রতিপক্ষের চেয়ে বেশি স্কোয়ার দখল করা।</p>
+<ul style="padding-left: 20px; line-height: 1.6;">
+<li>প্রতিটি টার্নে দুটি ডটের মধ্যে একটি রেখা আঁকতে হবে।</li>
+<li>স্কোয়ারের শেষ রেখা টানলে স্কোয়ারটি আপনার হবে এবং আপনি অতিরিক্ত টার্ন পাবেন।</li>
+<li>যার দান চলছে সে চাইলে কিছুক্ষণ গেম পজ (||) করে রাখতে পারবে।</li>
+<li>সময়সীমার মধ্যে মুভ না করলে সিস্টেম স্বয়ংক্রিয় মুভ করবে।</li>
+</ul>
+</div>
+</div>
+
+<!-- Countdown Overlay -->
+<div id="countdown-overlay" class="countdown-overlay">
+    <div id="countdown-number">3</div>
+    <span>খেলা শুরু হচ্ছে... প্রস্তুত হোন!</span>
+</div>
+
+<!-- 1. Opening Page -->
+<div id="page-opening" class="page active">
+<div class="opening-container">
+<img src="https://i.ibb.co.com/qv0VWgf/Adobe-Express-file.png" alt="logo">
+<h2>জমি দখল</h2>
+<p class="studio">Nur Games</p>
+<button class="btn btn-primary" id="openingLoaderBtn" style="padding: 15px 40px; font-size: 20px; border-radius: 30px;">
+START
+</button>
+</div>
+</div>
+
+<!-- 2. Main Menu Page -->
+<div id="page-menu" class="page">
+<div class="menu-container">
+<button id="menuToggleBtnMenu" class="utility-button">?</button>
+<h1>প্রধান মেনু</h1>
+    
+    <!-- Offline settings -->
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+        <h3>লোকাল গেম (অফলাইন)</h3>
+        <div class="settings">
+            <label for="num-players">প্লেয়ার:</label>
+            <select id="num-players"><option value="1">1 (Bot)</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option></select>
+            <label for="grid-size">গ্রিড:</label>
+            <input id="grid-size" type="number" value="10" min="1" style="width: 50px;" />
+            
+            <label for="timer-select">সময়:</label>
+            <select id="timer-select"><option value="60">৬০s</option><option value="30">৩০s</option><option value="0">বন্ধ</option></select>
+            
+            <button id="apply-players" class="btn">নাম ✏️</button>
+        </div>
+        <div class="player-name-list" id="player-name-list" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top:15px;"></div>
+        <button id="start-offline-game" class="btn start-game-btn-nnuu" style="margin-top:20px; width:100%;">START OFFLINE</button>
+    </div>
+
+    <hr style="border: 0; height: 1px; background: #ddd; margin: 20px 0;">
+
+    <!-- Online Settings -->
+    <div>
+        <h3 style="color: var(--primary);">🌐 অনলাইন মাল্টিপ্লেয়ার</h3>
+        <p style="font-size: 14px; color: #666; margin-bottom: 15px;">বিশ্বের যেকোনো প্রান্ত থেকে বন্ধুদের সাথে খেলুন।</p>
+        <button id="btn-online-hub" class="btn btn-success" style="padding: 15px 30px; font-size: 18px; width: 100%; border-radius: 50px;">
+            Play Online
+        </button>
+    </div>
+</div>
+</div>
+
+<!-- 3. Room Hub (Create or Join) -->
+<div id="page-room-hub" class="page">
+<div class="room-container">
+    <button id="back-from-hub" class="btn btn-danger" style="position:absolute; top:15px; left:15px;">&larr; ব্যাক</button>
+    <h2>Online Loby</h2>
+    <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 30px;">
+        <button id="btn-show-create" class="btn btn-primary" style="padding: 15px; font-size: 18px;">নতুন রুম তৈরি করুন (Host)</button>
+        <button id="btn-show-join" class="btn btn-success" style="padding: 15px; font-size: 18px;">রুম আইডিতে জয়েন করুন</button>
+    </div>
+</div>
+</div>
+
+<!-- 4. Create Room Page -->
+<div id="page-create-room" class="page">
+<div class="room-container">
+    <button id="back-from-create" class="btn btn-danger" style="position:absolute; top:15px; left:15px;">&larr; ব্যাক</button>
+    <h2 style="color: var(--primary);">রুম তৈরি করুন</h2>
+    
+    <div class="input-group" style="margin-top: 20px;">
+        <label>রুম আইডি (অটো জেনারেটেড)</label>
+        <div class="copy-paste-wrapper">
+            <input type="text" id="create-room-id" readonly style="background:#eee; font-weight:bold; letter-spacing: 2px;">
+            <button class="btn-icon" onclick="copyRoomId()">📋</button>
+        </div>
+    </div>
+
+    <div class="checkbox-group">
+        <input type="checkbox" id="create-open-room" checked>
+        <label for="create-open-room">পাসওয়ার্ড ছাড়া (Open Room)</label>
+    </div>
+
+    <div class="input-group" id="create-pass-group" style="display:none;">
+        <label>রুম পাসওয়ার্ড দিন</label>
+        <input type="text" id="create-room-pass" placeholder="পাসওয়ার্ড লিখুন">
+    </div>
+
+    <div class="input-group">
+        <label>সর্বোচ্চ প্লেয়ার (২ - ১০)</label>
+        <input type="number" id="create-max-players" value="2" min="2" max="10">
+    </div>
+
+    <div class="input-group">
+        <label>গ্রিড সাইজ (নূন্যতম ১)</label>
+        <input type="number" id="create-grid-size" value="10" min="1">
+    </div>
+
+    <div class="input-group">
+        <label>টাইমার</label>
+        <select id="create-timer">
+            <option value="60">৬০ সেকেন্ড</option>
+            <option value="30">৩০ সেকেন্ড</option>
+            <option value="0">অফ</option>
+        </select>
+    </div>
+
+    <button id="btn-create-room-confirm" class="btn btn-primary" style="width: 100%; margin-top: 10px; padding: 15px; font-size:18px;">রুম ক্রিয়েট করুন</button>
+</div>
+</div>
+
+<!-- 5. Join Room Page -->
+<div id="page-join-room" class="page">
+<div class="room-container">
+    <button id="back-from-join" class="btn btn-danger" style="position:absolute; top:15px; left:15px;">&larr; ব্যাক</button>
+    <h2 style="color: var(--win-color);">রুমে জয়েন করুন</h2>
+
+    <div class="input-group" style="margin-top: 30px;">
+        <label>রুম আইডি</label>
+        <div class="copy-paste-wrapper">
+            <input type="text" id="join-room-id" placeholder="ID পেস্ট করুন" style="text-transform: uppercase; letter-spacing: 2px;">
+            <button class="btn-icon" onclick="pasteRoomId()">📥</button>
+        </div>
+    </div>
+
+    <div class="checkbox-group">
+        <input type="checkbox" id="join-open-room" checked>
+        <label for="join-open-room">ওপেন রুম (পাসওয়ার্ড নেই)</label>
+    </div>
+
+    <div class="input-group" id="join-pass-group" style="display:none;">
+        <label>পাসওয়ার্ড</label>
+        <input type="text" id="join-room-pass" placeholder="পাসওয়ার্ড লিখুন">
+    </div>
+
+    <button id="btn-join-room-confirm" class="btn btn-success" style="width: 100%; margin-top: 20px; padding: 15px; font-size:18px;">জয়েন করুন</button>
+</div>
+</div>
+
+<!-- 6. Waiting Lobby -->
+<div id="page-lobby" class="page">
+<div class="room-container" style="max-width: 600px;">
+    <button id="btn-leave-lobby" class="btn btn-danger" style="position:absolute; top:15px; left:15px;">লিভ</button>
+    <div style="margin-top: 10px;">
+        <span style="background:#eee; padding:5px 15px; border-radius:20px; font-weight:bold; letter-spacing:1px;">ID: <span id="lobby-room-id-display">------</span></span>
+    </div>
+    <h2 style="margin-top: 10px;">অপেক্ষারত লবি</h2>
+    
+    <div style="font-size: 14px; background: #eef2ff; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+        <strong>সেটিংস:</strong> গ্রিড: <span id="lobby-grid-display">--</span> | টাইমার: <span id="lobby-timer-display">--</span>s 
+        <button id="btn-lobby-settings" class="btn" style="padding: 2px 8px; font-size: 12px; margin-left: 10px; display:none;">পরিবর্তন (Host)</button>
+    </div>
+
+    <div class="lobby-seats" id="lobby-seats-container"></div>
+
+    <button id="btn-start-online-game" class="btn btn-primary start-game-btn-nnuu" style="width:100%; margin-top:10px; display:none;">START GAME</button>
+    <p id="waiting-msg" style="color:#e74c3c; font-weight:bold; display:none;">অন্য প্লেয়ারের জন্য অপেক্ষা করুন...</p>
+</div>
+</div>
+
+<!-- Host Settings Modal -->
+<div id="host-settings-modal" class="modal-backdrop">
+<div class="modal-content">
+    <button class="modal-close-btn" onclick="document.getElementById('host-settings-modal').classList.remove('modal-active')">&times;</button>
+    <h2>সেটিংস আপডেট</h2>
+    <div class="input-group"><label>গ্রিড সাইজ</label><input type="number" id="update-grid" min="1"></div>
+    <div class="input-group"><label>টাইমার</label><select id="update-timer"><option value="60">৬০ সে.</option><option value="30">৩০ সে.</option><option value="0">অফ</option></select></div>
+    <button class="btn btn-primary" id="btn-save-settings" style="width:100%;">সংরক্ষণ করুন</button>
+</div>
+</div>
+
+<!-- 7. Game Page -->
+<div id="page-game-main" class="page">
+<div class="game-container">
+  
+  <!-- Pause Overlay -->
+  <div id="pause-overlay" class="pause-overlay">
+      <div class="pause-window">
+          <h2 style="color:var(--primary); margin-top:0;">গেম পজ করা হয়েছে</h2>
+          <p id="pause-text" style="color:#555; font-weight:bold;"></p>
+          <button id="unpauseBtn" class="btn btn-primary" style="font-size: 18px; padding: 10px 25px; margin-top:10px;">▶ গেম চালু করুন</button>
+      </div>
+  </div>
+
+  <button id="menuToggleBtnGame" class="utility-button" style="top:10px; right:10px;">?</button> 
+
+  <h1>জমি দখল <sup>NUR</sup></h1>
+  <div class="info">
+    <div id="timer-container"><div id="timer-bar"></div><span id="timer-countdown">60s</span></div>
+    <div id="player-turn" style="font-size:18px; font-weight:bold; margin-bottom:10px;"></div>
+    <div class="score-board" id="score-board"></div>
+  </div>
+  
+  <div id="game-board-wrapper">
+      <div id="game-board"></div>
+  </div>
+  
+  <div id="winner-message"></div>
+
+  <div class="controls">
+    <button id="pauseBtn" class="btn" style="background:#f1c40f;">পজ (||)</button>
+    <button id="backBtn" class="btn btn-danger">গেম ছাড়ুন</button> 
+  </div>
+</div>
+</div>
+
+<!-- 8. Winning Page -->
+<div id="page-winning" class="page">
+<div class="winning-container">
+<h1 id="winning-page-title">🎉 খেলা শেষ 🎉</h1>
+<div class="winner-name" id="final-winner">...</div>
+<h2 style="margin-top: 20px;">ফাইনাল র‍্যাঙ্কিং</h2>
+<ul class="rankings-list" id="score-rankings"></ul>
+<button id="backToMenuBtn" class="btn btn-primary" style="margin-top: 20px;">লবিতে ফিরুন</button>
+</div>
+</div>
+
+<div class="notification-container" id="notificationContainer"></div>
+
+<script>
+// --- FIREBASE SETUP ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDjAnhVln8V-qpXDQmLWY8OTo7Qot01UPY",
+  authDomain: "topup24vercel.firebaseapp.com",
+  databaseURL: "https://topup24vercel-default-rtdb.asia-southeast1.firebasedatabase.app/",
+  projectId: "topup24vercel",
+  storageBucket: "topup24vercel.firebasestorage.app",
+  messagingSenderId: "1054942807566",
+  appId: "1:1054942807566:web:953c23afdd81bf7d225e5f"
+};
+if(!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+const auth = firebase.auth();
+const db = firebase.database();
+
+// --- GLOBAL VARIABLES ---
+let currentUser = null;
+let isOnlineMode = false;
+let currentRoomId = null;
+let amIHost = false;
+let mySeatIndex = -1;
+let onlineRoomData = null;
+let roomListener = null;
+let pingInterval = null;
+
+const PLAYER_COLORS = ['#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22', '#00BCD4', '#E91E63', '#607D8B', '#795548'];
+let players = []; 
+let currentPlayerIndex = 0;
+const CELL = 40; const DOT = 12; const OFFSET = 14; const LINE_THICK = 10;
+let gridSize = 10; let totalBoxes = 0; let lines = {}; let boxes = {};
+let isGameOver = false; let isProcessing = false;
+
+// Timer and Pause variables
+let MOVE_TIME_LIMIT = 60000; 
+let timerInterval = null; let timerStartTime = 0; let isTimerEnabled = true;
+let isPausedLocal = false; let timeRemainingOnPause = MOVE_TIME_LIMIT;
+
+// --- UTILITY & UI FUNCTIONS ---
+function showPage(pageId) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelector(pageId).classList.add('active');
+}
+function notify(title, message, color) {
+    const container = document.getElementById('notificationContainer');
+    const notif = document.createElement('div');
+    notif.className = 'notification';
+    notif.innerHTML = `<div style="font-weight:bold; color:${color}">${title}</div><div style="font-size:14px; color:#444;">${message}</div>`;
+    notif.style.borderColor = color;
+    container.insertBefore(notif, container.firstChild);
+    setTimeout(() => notif.classList.add('active'), 50);
+    setTimeout(() => { notif.classList.remove('active'); setTimeout(() => notif.remove(), 500); }, 3000);
+}
+
+function generateId(length = 6) {
+    return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
+}
+
+// --- AUTHENTICATION ---
+auth.onAuthStateChanged(user => {
+    if (user) {
+        currentUser = { uid: user.uid, name: user.displayName || "Player", photoURL: user.photoURL || "https://i.ibb.co/qv0VWgf/Adobe-Express-file.png" };
+        db.ref('users/' + user.uid).update({ name: currentUser.name, photoURL: currentUser.photoURL });
+        document.getElementById('user-profile').style.display = 'flex';
+        document.getElementById('nav-user-img').src = currentUser.photoURL;
+        document.getElementById('nav-user-name').textContent = currentUser.name.split(' ')[0];
+    } else {
+        currentUser = null;
+        document.getElementById('user-profile').style.display = 'none';
+    }
+});
+
+document.getElementById('btn-google-login').onclick = () => {
+    document.getElementById('auth-modal').classList.remove('modal-active');
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(e => notify("লগিন ফেইল", e.message, "var(--danger)"));
+};
+
+document.getElementById('btn-logout').onclick = () => {
+    auth.signOut().then(() => notify("👋", "সফলভাবে লগ আউট হয়েছে", "var(--danger)"));
+};
+
+// --- OFFLINE SETUP ---
+function renderOfflineNames(){
+    const n = parseInt(document.getElementById('num-players').value, 10);
+    const list = document.getElementById('player-name-list');
+    list.innerHTML = '';
+    for(let i=0;i<n;i++){
+        list.innerHTML += `<div style="display:flex; flex-direction:column; align-items:center; width:80px;">
+        <span style="display:inline-block; width:15px; height:15px; border-radius:50%; background:${PLAYER_COLORS[i]}; margin-bottom:5px;"></span>
+        <input type="text" id="off-name-${i}" placeholder="P${i+1}" style="width:100%; text-align:center; padding:5px; border-radius:5px; border:1px solid #ccc; box-sizing:border-box;">
+        </div>`;
+    }
+}
+document.getElementById('num-players').addEventListener('change', renderOfflineNames);
+document.getElementById('apply-players').addEventListener('click', renderOfflineNames);
+
+// --- NAVIGATION EVENTS ---
+document.getElementById('openingLoaderBtn').onclick = () => { showPage('#page-menu'); renderOfflineNames(); };
+document.getElementById('menuToggleBtnMenu').onclick = () => document.getElementById('rules-modal').classList.add('modal-active');
+document.getElementById('menuToggleBtnGame').onclick = () => document.getElementById('rules-modal').classList.add('modal-active');
+document.getElementById('modalCloseBtn').onclick = () => document.getElementById('rules-modal').classList.remove('modal-active');
+
+// Online Navigation (Play Online Button)
+document.getElementById('btn-online-hub').onclick = () => {
+    if(!currentUser) { document.getElementById('auth-modal').classList.add('modal-active'); return; }
+    showPage('#page-room-hub');
+};
+document.getElementById('back-from-hub').onclick = () => showPage('#page-menu');
+document.getElementById('btn-show-create').onclick = () => { document.getElementById('create-room-id').value = generateId(); showPage('#page-create-room'); };
+document.getElementById('btn-show-join').onclick = () => showPage('#page-join-room');
+document.getElementById('back-from-create').onclick = () => showPage('#page-room-hub');
+document.getElementById('back-from-join').onclick = () => showPage('#page-room-hub');
+
+document.getElementById('create-open-room').onchange = (e) => document.getElementById('create-pass-group').style.display = e.target.checked ? 'none' : 'block';
+document.getElementById('join-open-room').onchange = (e) => document.getElementById('join-pass-group').style.display = e.target.checked ? 'none' : 'block';
+
+window.copyRoomId = () => { navigator.clipboard.writeText(document.getElementById('create-room-id').value); notify("✅", "রুম আইডি কপি করা হয়েছে", "var(--win-color)"); };
+window.pasteRoomId = async () => { try{ const text = await navigator.clipboard.readText(); document.getElementById('join-room-id').value = text; }catch(e){} };
+
+
+// --- ROOM LOGIC ---
+document.getElementById('btn-create-room-confirm').onclick = () => {
+    const roomId = document.getElementById('create-room-id').value;
+    const isOpen = document.getElementById('create-open-room').checked;
+    const pass = isOpen ? "" : document.getElementById('create-room-pass').value;
+    const maxP = parseInt(document.getElementById('create-max-players').value);
+    const grid = parseInt(document.getElementById('create-grid-size').value);
+    const timer = parseInt(document.getElementById('create-timer').value);
+
+    db.ref('rooms/' + roomId).set({
+        host: currentUser.uid, password: pass, status: "lobby",
+        settings: { maxPlayers: maxP, gridSize: Math.max(1, grid), timer: timer },
+        players: { [currentUser.uid]: { seatIndex: 0, name: currentUser.name, photoURL: currentUser.photoURL, color: PLAYER_COLORS[0], ping: 0 } }
+    }).then(() => joinRoomInternal(roomId, true, 0));
+};
+
+document.getElementById('btn-join-room-confirm').onclick = () => {
+    const roomId = document.getElementById('join-room-id').value.toUpperCase().trim();
+    const isOpen = document.getElementById('join-open-room').checked;
+    const pass = isOpen ? "" : document.getElementById('join-room-pass').value;
+
+    db.ref('rooms/' + roomId).once('value', snap => {
+        if(!snap.exists()) { notify("❌", "রুম পাওয়া যায়নি!", "var(--danger)"); return; }
+        const room = snap.val();
+        if(room.status !== "lobby") { notify("❌", "গেম ইতিমধ্যেই শুরু হয়ে গেছে!", "var(--danger)"); return; }
+        if(room.password !== pass) { notify("❌", "পাসওয়ার্ড ভুল!", "var(--danger)"); return; }
+        
+        let playersMap = room.players || {};
+        let seatTaken = Object.values(playersMap).map(p => p.seatIndex);
+        if(seatTaken.length >= room.settings.maxPlayers) { notify("❌", "রুম ফুল হয়ে গেছে!", "var(--danger)"); return; }
+        
+        let emptySeat = -1;
+        for(let i=0; i<room.settings.maxPlayers; i++){ if(!seatTaken.includes(i)) { emptySeat = i; break; } }
+        
+        db.ref(`rooms/${roomId}/players/${currentUser.uid}`).set({
+            seatIndex: emptySeat, name: currentUser.name, photoURL: currentUser.photoURL, color: PLAYER_COLORS[emptySeat], ping: 0
+        }).then(() => joinRoomInternal(roomId, false, emptySeat));
+    });
+};
+
+function joinRoomInternal(roomId, hostStatus, seatIdx) {
+    currentRoomId = roomId; amIHost = hostStatus; mySeatIndex = seatIdx; isOnlineMode = true;
+    db.ref(`rooms/${roomId}/players/${currentUser.uid}`).onDisconnect().remove();
+
+    document.getElementById('lobby-room-id-display').textContent = roomId;
+    showPage('#page-lobby');
+    startPing();
+    
+    roomListener = db.ref('rooms/' + roomId).on('value', snap => {
+        if(!snap.exists() || !snap.val().players || !snap.val().players[currentUser.uid]) { leaveRoom(); notify("⚠️", "রুম বন্ধ/লিভ হয়েছে", "var(--danger)"); return; }
+        onlineRoomData = snap.val();
+        
+        document.getElementById('lobby-grid-display').textContent = onlineRoomData.settings.gridSize;
+        document.getElementById('lobby-timer-display').textContent = onlineRoomData.settings.timer;
+        
+        if(amIHost) {
+            document.getElementById('btn-lobby-settings').style.display = 'inline-block';
+            let pCount = Object.keys(onlineRoomData.players).length;
+            document.getElementById('btn-start-online-game').style.display = pCount > 1 ? 'block' : 'none';
+            document.getElementById('waiting-msg').style.display = pCount > 1 ? 'none' : 'block';
+        }
+
+        renderLobbySeats(onlineRoomData);
+
+        if(onlineRoomData.status === "countdown") startCountdown();
+        else if(onlineRoomData.status === "playing") {
+            if(!document.getElementById('page-game-main').classList.contains('active')) { initOnlineGame(); showPage('#page-game-main'); }
+            syncOnlineGameBoard(onlineRoomData.gameState);
+        } else if(onlineRoomData.status === "finished") endOnlineGame();
+    });
+}
+
+function renderLobbySeats(room) {
+    const container = document.getElementById('lobby-seats-container'); container.innerHTML = '';
+    let seatArray = new Array(room.settings.maxPlayers).fill(null);
+    Object.values(room.players).forEach(p => { seatArray[p.seatIndex] = p; });
+
+    for(let i=0; i<room.settings.maxPlayers; i++){
+        const p = seatArray[i];
+        if(p) {
+            container.innerHTML += `
+            <div class="seat occupied ${p.seatIndex===0?'host':''}" style="border-color:${p.color}">
+                <div class="crown">👑</div><img src="${p.photoURL}">
+                <div class="name" style="color:${p.color}">${p.name}</div>
+                <div class="ping">${p.ping} ms</div>
+            </div>`;
+        } else container.innerHTML += `<div class="seat"><div style="color:#aaa; font-size:24px;">+</div><div class="name" style="color:#aaa">খালি সিট</div></div>`;
+    }
+}
+
+document.getElementById('btn-lobby-settings').onclick = () => { document.getElementById('update-grid').value = onlineRoomData.settings.gridSize; document.getElementById('update-timer').value = onlineRoomData.settings.timer; document.getElementById('host-settings-modal').classList.add('modal-active'); };
+document.getElementById('btn-save-settings').onclick = () => { db.ref(`rooms/${currentRoomId}/settings`).update({ gridSize: parseInt(document.getElementById('update-grid').value), timer: parseInt(document.getElementById('update-timer').value) }); document.getElementById('host-settings-modal').classList.remove('modal-active'); };
+
+function leaveRoom() {
+    if(currentRoomId && currentUser) { db.ref(`rooms/${currentRoomId}/players/${currentUser.uid}`).remove(); if(amIHost) db.ref(`rooms/${currentRoomId}`).remove(); }
+    if(roomListener) db.ref('rooms/' + currentRoomId).off('value', roomListener);
+    stopPing(); stopTimer(); currentRoomId = null; isOnlineMode = false; amIHost = false; onlineRoomData = null;
+    showPage('#page-room-hub');
+}
+document.getElementById('btn-leave-lobby').onclick = leaveRoom;
+document.getElementById('backBtn').onclick = () => { if(confirm("গেম ছেড়ে যেতে চান?")) leaveRoom(); };
+
+function startPing() {
+    stopPing();
+    pingInterval = setInterval(() => {
+        if(!currentRoomId) return;
+        const start = Date.now();
+        db.ref(`users/${currentUser.uid}/pingCheck`).set(start).then(() => {
+            db.ref(`rooms/${currentRoomId}/players/${currentUser.uid}/ping`).set(Date.now() - start);
+        });
+    }, 4000);
+}
+function stopPing() { if(pingInterval) clearInterval(pingInterval); }
+
+// --- GAMEPLAY CORE ---
+document.getElementById('btn-start-online-game').onclick = () => {
+    let initialScores = {}; Object.keys(onlineRoomData.players).forEach(k => initialScores[k] = 0);
+    db.ref('rooms/' + currentRoomId).update({
+        status: "countdown",
+        gameState: { currentTurnIndex: 0, lines: {}, boxes: {}, scores: initialScores, timerStart: firebase.database.ServerValue.TIMESTAMP, isPaused: false }
+    });
+};
+
+function startCountdown() {
+    const overlay = document.getElementById('countdown-overlay'), num = document.getElementById('countdown-number');
+    overlay.style.display = 'flex'; let count = 3; num.textContent = count;
+    let iv = setInterval(() => { count--; if(count>0) num.textContent=count; else { clearInterval(iv); overlay.style.display='none'; if(amIHost) db.ref('rooms/' + currentRoomId).update({ status: "playing" }); } }, 1000);
+}
+
+document.getElementById('start-offline-game').onclick = () => {
+    isOnlineMode = false; const n = parseInt(document.getElementById('num-players').value, 10); players = [];
+    for(let i=0;i<n;i++){ players.push({ uid: `off_${i}`, name: document.getElementById(`off-name-${i}`).value || `P${i+1}`, color: PLAYER_COLORS[i], score: 0, isBot: (n===1 && i===1) }); }
+    if(n===1) players.push({ uid: 'bot', name: 'Computer 🤖', color: PLAYER_COLORS[1], score:0, isBot:true });
+    
+    gridSize = Math.max(1, parseInt(document.getElementById('grid-size').value) || 10);
+    const selTimer = parseInt(document.getElementById('timer-select').value);
+    isTimerEnabled = selTimer > 0; MOVE_TIME_LIMIT = selTimer > 0 ? selTimer * 1000 : 999999;
+    
+    initOfflineGame(); showPage('#page-game-main');
+};
+
+function initOfflineGame() {
+    currentPlayerIndex = 0; lines = {}; boxes = {}; isGameOver = false; isPausedLocal = false; document.getElementById('pause-overlay').classList.remove('active');
+    players.forEach(p => p.score = 0); timeRemainingOnPause = MOVE_TIME_LIMIT;
+    drawGrid(); updateScoreBoard(); updateTurnDisplay(); startTimer();
+}
+
+function initOnlineGame() {
+    players = [];
+    Object.keys(onlineRoomData.players).forEach(uid => { let p = onlineRoomData.players[uid]; players[p.seatIndex] = { uid: uid, name: p.name, color: p.color, score: 0, photoURL: p.photoURL, ping: p.ping }; });
+    players = players.filter(p => p !== null && p !== undefined);
+    
+    gridSize = onlineRoomData.settings.gridSize;
+    const selTimer = onlineRoomData.settings.timer;
+    isTimerEnabled = selTimer > 0; MOVE_TIME_LIMIT = selTimer > 0 ? selTimer * 1000 : 999999;
+    lines = {}; boxes = {}; isGameOver = false; drawGrid();
+}
+
+function drawGrid() {
+    const gb = document.getElementById('game-board'); gb.innerHTML = '';
+    totalBoxes = (gridSize - 1) * (gridSize - 1);
+    const boardSize = OFFSET * 2 + (gridSize - 1) * CELL + DOT;
+    gb.style.width = boardSize + 'px'; gb.style.height = boardSize + 'px';
+
+    for(let y=0;y<gridSize;y++) for(let x=0;x<gridSize;x++){
+        const dot = document.createElement('div'); dot.className = 'dot';
+        dot.style.left = (OFFSET + x * CELL - DOT/2) + 'px'; dot.style.top = (OFFSET + y * CELL - DOT/2) + 'px';
+        dot.style.background = '#111'; gb.appendChild(dot); setTimeout(() => dot.classList.add('pop'), 20);
+    }
+    for(let y=0;y<gridSize;y++) for(let x=0;x<gridSize-1;x++) gb.appendChild(createLineEl('h', x, y, `h-${x}-${y}`));
+    for(let y=0;y<gridSize-1;y++) for(let x=0;x<gridSize;x++) gb.appendChild(createLineEl('v', x, y, `v-${x}-${y}`));
+}
+
+function createLineEl(type, x, y, id){
+    const line = document.createElement('div'); line.classList.add('line'); line.dataset.id = id;
+    const inner = document.createElement('div'); inner.className = 'line-inner'; line.appendChild(inner);
+    if(type === 'h'){ line.style.left = `${OFFSET + x * CELL + DOT/2}px`; line.style.top = `${OFFSET + y * CELL - LINE_THICK/2}px`; line.style.width = `${CELL - DOT}px`; line.style.height = `${LINE_THICK}px`; }
+    else { line.style.left = `${OFFSET + x * CELL - LINE_THICK/2}px`; line.style.top = `${OFFSET + y * CELL + DOT/2}px`; line.style.width = `${LINE_THICK}px`; line.style.height = `${CELL - DOT}px`; }
+    line.onclick = () => handleLineClick(id); return line;
+}
+
+function handleLineClick(lineId) {
+    if(isGameOver || isProcessing || lines[lineId]) return;
+    if(isOnlineMode) {
+        if(!onlineRoomData || !onlineRoomData.gameState || onlineRoomData.gameState.isPaused) return;
+        let cTurn = onlineRoomData.gameState.currentTurnIndex;
+        if(players[cTurn].uid !== currentUser.uid) return; 
+        isProcessing = true; processMove(lineId, cTurn);
+    } else {
+        if(players[currentPlayerIndex].isBot || isPausedLocal) return;
+        isProcessing = true; processMove(lineId, currentPlayerIndex);
+    }
+}
+
+function processMove(lineId, pIndex) {
+    let tempLines = { ...lines }; tempLines[lineId] = players[pIndex].uid;
+    let completedCount = 0; let newlyCaptured = [];
+    const [type, sx, sy] = lineId.split('-'); const col = parseInt(sx,10), row = parseInt(sy,10);
+    
+    function checkB(c, r) {
+        if(c < 0 || r < 0 || c >= gridSize-1 || r >= gridSize-1 || boxes[`${c}-${r}`]) return false;
+        if(tempLines[`h-${c}-${r}`] && tempLines[`h-${c}-${r+1}`] && tempLines[`v-${c}-${r}`] && tempLines[`v-${c+1}-${r}`]){ newlyCaptured.push(`${c}-${r}`); return true; } return false;
+    }
+    
+    if(type === 'h'){ if(checkB(col, row)) completedCount++; if(checkB(col, row - 1)) completedCount++; }
+    else { if(checkB(col, row)) completedCount++; if(checkB(col - 1, row)) completedCount++; }
+
+    if(isOnlineMode) {
+        let updates = {}; updates[`rooms/${currentRoomId}/gameState/lines/${lineId}`] = players[pIndex].uid;
+        newlyCaptured.forEach(b => { updates[`rooms/${currentRoomId}/gameState/boxes/${b}`] = players[pIndex].uid; });
+        if(completedCount > 0) updates[`rooms/${currentRoomId}/gameState/scores/${players[pIndex].uid}`] = firebase.database.ServerValue.increment(completedCount);
+        else updates[`rooms/${currentRoomId}/gameState/currentTurnIndex`] = (pIndex + 1) % players.length;
+        updates[`rooms/${currentRoomId}/gameState/timerStart`] = firebase.database.ServerValue.TIMESTAMP;
+        db.ref().update(updates).then(() => { isProcessing = false; });
+    } else {
+        applyMoveVisually(lineId, pIndex); newlyCaptured.forEach(b => fillBoxVisually(b, pIndex));
+        players[pIndex].score += completedCount;
+        if(completedCount === 0) currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+        updateScoreBoard(); updateTurnDisplay(); timeRemainingOnPause = MOVE_TIME_LIMIT; startTimer();
+        if(Object.keys(boxes).length === totalBoxes) { endOfflineGame(); return; }
+        if(players[currentPlayerIndex].isBot) { setTimeout(botMove, 500); } else { isProcessing = false; }
+    }
+}
+
+function applyMoveVisually(lineId, pIndex) {
+    lines[lineId] = players[pIndex].uid;
+    const el = document.querySelector(`.line[data-id="${lineId}"]`);
+    if(el && !el.classList.contains('drawn')){ el.classList.add('drawn'); el.querySelector('.line-inner').style.background = players[pIndex].color; }
+}
+
+function fillBoxVisually(boxId, pIndex) {
+    if(boxes[boxId]) return; boxes[boxId] = players[pIndex].uid;
+    const [c, r] = boxId.split('-'); const col=parseInt(c), row=parseInt(r);
+    const box = document.createElement('div'); box.className = 'box';
+    box.style.left = `${OFFSET + col * CELL + DOT/2}px`; box.style.top = `${OFFSET + row * CELL + DOT/2}px`;
+    box.style.width = `${CELL - DOT}px`; box.style.height = `${CELL - DOT}px`;
+    box.style.background = players[pIndex].color; box.textContent = players[pIndex].name.charAt(0).toUpperCase();
+    document.getElementById('game-board').appendChild(box); setTimeout(()=>box.classList.add('filled'), 20);
+}
+
+function syncOnlineGameBoard(gs) {
+    if(!gs) return;
+    
+    // Pause state sync
+    if(gs.isPaused) {
+        document.getElementById('pause-overlay').classList.add('active');
+        if(gs.pausedBy === currentUser.uid) {
+            document.getElementById('pause-text').textContent = "আপনি গেম পজ করেছেন।"; document.getElementById('unpauseBtn').style.display = 'inline-block';
+        } else {
+            let pauser = players.find(p => p.uid === gs.pausedBy);
+            document.getElementById('pause-text').textContent = (pauser ? pauser.name : "কেউ") + " গেম পজ করেছেন।"; document.getElementById('unpauseBtn').style.display = 'none';
+        }
+        stopTimer(); return; // Stop execution to freeze game view
+    } else {
+        document.getElementById('pause-overlay').classList.remove('active');
+    }
+
+    if(gs.lines) Object.keys(gs.lines).forEach(id => { if(!lines[id]) { let pIdx = players.findIndex(p => p.uid === gs.lines[id]); if(pIdx !== -1) applyMoveVisually(id, pIdx); } });
+    if(gs.boxes) Object.keys(gs.boxes).forEach(id => { if(!boxes[id]) { let pIdx = players.findIndex(p => p.uid === gs.boxes[id]); if(pIdx !== -1) fillBoxVisually(id, pIdx); } });
+    if(gs.scores) players.forEach(p => p.score = gs.scores[p.uid] || 0); 
+    
+    updateScoreBoard(); currentPlayerIndex = gs.currentTurnIndex; updateTurnDisplay();
+    
+    let timeSinceMove = Date.now() - (gs.timerStart || Date.now()); timerStartTime = Date.now() - timeSinceMove; startTimer();
+
+    if(Object.keys(boxes).length === totalBoxes) if(amIHost && !isGameOver) { isGameOver = true; db.ref('rooms/' + currentRoomId).update({ status: "finished" }); }
+}
+
+function updateScoreBoard() {
+    const sb = document.getElementById('score-board'); sb.innerHTML = '';
+    players.forEach(p => {
+        let pingTxt = isOnlineMode ? `<span class="ping-indicator">${onlineRoomData.players[p.uid]?.ping || 0}ms</span>` : '';
+        sb.innerHTML += `<div class="player-score" style="border-color:${p.color}">
+            <div style="display:flex; align-items:center; gap:6px;"><span style="width:12px;height:12px;border-radius:50%;background:${p.color}"></span><span>${p.name.split(' ')[0]}</span></div>
+            <div style="font-size:18px;">${p.score}</div>${pingTxt}
+        </div>`;
+    });
+}
+
+function updateTurnDisplay() {
+    if(players.length === 0) return; const p = players[currentPlayerIndex];
+    let txt = `🎯 এখন খেলছে: <span style="color:${p.color}">${p.name}</span>`;
+    if(isOnlineMode && p.uid === currentUser.uid) txt = `🎯 <span style="color:var(--win-color); font-weight:900;">আপনার দান!</span>`;
+    document.getElementById('player-turn').innerHTML = txt;
+}
+
+// Pause and Resume Logic
+document.getElementById('pauseBtn').onclick = () => {
+    if(isGameOver || isProcessing) return;
+    if(isOnlineMode) {
+        if(players[currentPlayerIndex].uid === currentUser.uid) {
+            db.ref('rooms/' + currentRoomId + '/gameState').update({ isPaused: true, pausedBy: currentUser.uid });
+        } else notify("❌", "শুধুমাত্র যার দান সে গেম পজ করতে পারবে!", "var(--danger)");
+    } else {
+        if(players[currentPlayerIndex].isBot) return;
+        isPausedLocal = true; let elapsed = Date.now() - timerStartTime; timeRemainingOnPause = MOVE_TIME_LIMIT - elapsed;
+        stopTimer(); document.getElementById('pause-overlay').classList.add('active');
+        document.getElementById('pause-text').textContent = "অফলাইন গেম পজ করা হয়েছে।"; document.getElementById('unpauseBtn').style.display = 'inline-block';
+    }
+};
+
+document.getElementById('unpauseBtn').onclick = () => {
+    if(isOnlineMode) {
+        db.ref('rooms/' + currentRoomId + '/gameState').update({ isPaused: false, pausedBy: null, timerStart: firebase.database.ServerValue.TIMESTAMP });
+    } else {
+        isPausedLocal = false; document.getElementById('pause-overlay').classList.remove('active'); startTimer();
+        if(players[currentPlayerIndex].isBot) setTimeout(botMove, 500);
+    }
+};
+
+function startTimer() {
+    stopTimer(); if(!isTimerEnabled || isGameOver) { document.getElementById('timer-container').style.display = 'none'; return; }
+    document.getElementById('timer-container').style.display = 'block';
+    
+    if(!isOnlineMode) { if(timeRemainingOnPause === MOVE_TIME_LIMIT) timerStartTime = Date.now(); else timerStartTime = Date.now() - (MOVE_TIME_LIMIT - timeRemainingOnPause); timeRemainingOnPause = MOVE_TIME_LIMIT; }
+    
+    timerInterval = setInterval(() => {
+        if(isPausedLocal) return;
+        let elapsed = Date.now() - timerStartTime; let remaining = MOVE_TIME_LIMIT - elapsed;
+        if(remaining <= 0) {
+            clearInterval(timerInterval); document.getElementById('timer-bar').style.width = '0%'; document.getElementById('timer-countdown').textContent = '0s';
+            handleTimeout(); return;
+        }
+        let pct = (remaining / MOVE_TIME_LIMIT) * 100;
+        document.getElementById('timer-bar').style.width = pct + '%'; document.getElementById('timer-bar').style.background = pct < 20 ? 'linear-gradient(90deg, #f1c40f, var(--danger))' : 'linear-gradient(90deg, var(--win-color), var(--primary))';
+        document.getElementById('timer-countdown').textContent = Math.ceil(remaining/1000) + 's';
+    }, 100);
+}
+function stopTimer() { if(timerInterval) clearInterval(timerInterval); }
+
+function handleTimeout() {
+    if(isOnlineMode) { if(players[currentPlayerIndex].uid === currentUser.uid && !isProcessing) autoRandomMove(); } 
+    else { if(!players[currentPlayerIndex].isBot) autoRandomMove(); else botMove(); }
+}
+function autoRandomMove() { isProcessing = true; const avail = Object.keys(lines).filter(id => !lines[id]); if(avail.length > 0) processMove(avail[Math.floor(Math.random() * avail.length)], currentPlayerIndex); }
+function botMove() { isProcessing = true; const avail = Object.keys(lines).filter(id => !lines[id]); if(avail.length === 0) return; processMove(avail[Math.floor(Math.random() * avail.length)], currentPlayerIndex); }
+
+function endOfflineGame() { isGameOver = true; stopTimer(); renderWinners(); showPage('#page-winning'); }
+function endOnlineGame() { isGameOver = true; stopTimer(); renderWinners(); showPage('#page-winning'); }
+
+function renderWinners() {
+    let sorted = [...players].sort((a,b) => b.score - a.score); let top = sorted[0].score; let winners = sorted.filter(p => p.score === top);
+    let titleEl = document.getElementById('winning-page-title'); let winNameEl = document.getElementById('final-winner');
+    
+    if(winners.length > 1) { titleEl.textContent = '🤝 খেলা ড্র!'; winNameEl.textContent = `${winners.length} জন ড্র করেছেন!`; winNameEl.style.color = '#333'; } 
+    else { titleEl.textContent = '🎉 বিজয়ী হয়েছে 🎉'; winNameEl.textContent = winners[0].name; winNameEl.style.color = winners[0].color; }
+    
+    let ul = document.getElementById('score-rankings'); ul.innerHTML = '';
+    sorted.forEach((p, i) => { ul.innerHTML += `<li class="rank-item" style="background:${i===0?'#e6ffed':''}">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="color:#777">#${i+1}</span><span style="width:14px;height:14px;border-radius:50%;background:${p.color}"></span>${p.name}</div><span>${p.score} পয়েন্ট</span></li>`; });
+}
+document.getElementById('backToMenuBtn').onclick = () => { if(isOnlineMode) showPage('#page-lobby'); else showPage('#page-menu'); };
+
+</script>
+</body>
+</html>>
+</body>
+</html>Inputs);
+numPlayersSelect.addEventListener('change', renderNameInputs);
+
+startGameButton.addEventListener('click', () => {
+
+const startBtnEl = document.getElementById('start-game');
+startBtnEl.style.transform = 'scale(0.95)';
+startBtnEl.style.animation = 'gradientShift 1.5s ease';
+
+for (let i = 0; i < 3; i++) {
+setTimeout(() => {
+createParticles(particlesContainerMenu, true);
+}, i * 200);
+}
+
+setTimeout(() => {
+startBtnEl.style.transform = '';
+startBtnEl.style.animation = 'gradientShift 6s ease infinite';
+}, 500);
+
+const n = parseInt(numPlayersSelect.value, 10);
+if(playerNameList.children.length !== n) renderNameInputs();
+
+backgroundSound.play().catch(e => {});
+backgroundSound.muted = isMuted;
+
+showPage('#page-transition-loader');
+
+setTimeout(() => {
+players = buildPlayersFromInputs();
+initGame();
+showPage('#page-game-main');
+}, 2500); // Faster Transition (2.5s)
+});
+
+startGameButton.addEventListener('mouseenter', function() {
+createParticles(particlesContainerMenu);
+});
+
+const particleInterval = setInterval(() => {
+if (document.getElementById('page-menu').classList.contains('active')) {
+createParticles(particlesContainerMenu);
+}
+}, 800);
+
+const openingParticleInterval = setInterval(() => {
+if (document.getElementById('page-opening').classList.contains('active')) {
+createLoadingParticles(particlesContainerOpening);
+}
+}, 800);
+
+const transitionParticleInterval = setInterval(() => {
+if (document.getElementById('page-transition-loader').classList.contains('active')) {
+createLoadingParticles(particlesContainerTransition);
+}
+}, 800);
+
+
+resetBtn.addEventListener('click', () => {
+if (confirm('আপনি কি নিশ্চিত যে চলতি গেমটি রিসেট করতে চান? এটি করলে বর্তমান স্কোর ও অগ্রগতি নষ্ট হবে। বাতিল করলে খেলা চলতে থাকবে।')) {
+unpauseGame(); 
+initGame(); 
+}
+});
+
+backBtn.addEventListener('click', () => {
+if (confirm('আপনি কি নিশ্চিত যে মেনুতে ফিরবেন? এটি করলে বর্তমান স্কোর ও অগ্রগতি নষ্ট হবে। বাতিল করলে খেলা চলতে থাকবে।')) {
+unpauseGame(); 
+showPage('#page-transition-loader'); 
+setTimeout(() => {
+showPage('#page-menu'); 
+}, 2500); // Faster Transition (2.5s)
+}
+});
+
+backToMenuBtn.addEventListener('click', () => {
+showPage('#page-menu');
+});
+
+pauseBtn.addEventListener('click', pauseGame);
+unpauseBtn.addEventListener('click', unpauseGame);
+
+
+});
+</script>
+</body>
+</html>
